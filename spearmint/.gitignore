@@ -4,4 +4,7 @@
 **/jobs
 **/output
 **/best_job_and_result.txt
+**/*_hyperparameters.txt
 **/trace.csv
+**/*.lock
+**/build

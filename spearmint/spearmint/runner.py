@@ -2,7 +2,6 @@ import sys
 import os
 import traceback
 
-from spearmint_pb2   import *
 from ExperimentGrid  import *
 from helpers         import *
 
@@ -113,9 +112,9 @@ def run_python_job(job):
     # Convert the PB object into useful parameters.
     params = {}
     for param in job.param:
-        dbl_vals = param.dbl_val._values
-        int_vals = param.int_val._values
-        str_vals = param.str_val._values
+        dbl_vals = param.dbl_val
+        int_vals = param.int_val
+        str_vals = param.str_val
 
         if len(dbl_vals) > 0:
             params[param.name] = np.array(dbl_vals)
