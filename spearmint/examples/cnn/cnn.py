@@ -5,14 +5,28 @@ import numpy as np
 from sklearn.model_selection import train_test_split
 from keras.preprocessing.image import ImageDataGenerator
 
+import os
 import constant
+import GPUtil
 from keras import Input, Model
 from keras.callbacks import Callback, LearningRateScheduler, ReduceLROnPlateau
 from keras.datasets import cifar10
-from keras.layers import Conv2D, BatchNormalization, Dropout, Flatten, Dense, Activation
+from keras.layers import Conv2D, BatchNormalization, Dropout, Flatten, Dense, Activation, MaxPooling2D
 from keras.losses import categorical_crossentropy
 from keras.optimizers import Adam
 from keras.regularizers import l2
+
+
+def select_gpu():
+    try:
+        # Get the first available GPU
+        DEVICE_ID_LIST = GPUtil.getFirstAvailable()
+        DEVICE_ID = DEVICE_ID_LIST[0] # grab first element from list
+
+        # Set CUDA_VISIBLE_DEVICES to mask out all other GPUs than the first available device id
+        os.environ["CUDA_VISIBLE_DEVICES"] = str(DEVICE_ID)
+    except EnvironmentError:
+        print("GPU not found")
 
 
 class NoImprovementError(Exception):
@@ -205,6 +219,7 @@ def cnn(params):
         output_tensor = BatchNormalization()(output_tensor)
         output_tensor = Activation('relu')(output_tensor)
         output_tensor = Dropout(d[i])(output_tensor)
+        output_tensor = MaxPooling2D()(output_tensor)
 
     output_tensor = Flatten()(output_tensor)
     output_tensor = Dense(10, kernel_initializer='he_normal', activation='softmax')(output_tensor)
@@ -222,6 +237,7 @@ def cnn(params):
 
 # Write a function like this called 'main'
 def main(job_id, params):
+    select_gpu()
     print(params)
     print('Start time: ', datetime.datetime.now())
     print 'Anything printed here will end up in the output directory for job #:', str(job_id)
