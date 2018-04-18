@@ -6,8 +6,8 @@ if [ -d $1 ]
 then
     cd $1
     rm trace.csv
-    rm output/*
-    rm jobs/*
+    rm -rf output
+    rm -rf jobs
     rm expt-grid.pkl
     rm expt-grid.pkl.lock
     rm GP*Chooser*.pkl
