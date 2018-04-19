@@ -1,6 +1,8 @@
 import datetime
 
 import keras
+import tensorflow as tf
+from keras import backend
 import numpy as np
 from sklearn.model_selection import train_test_split
 from keras.preprocessing.image import ImageDataGenerator
@@ -156,6 +158,12 @@ class ModelTrainer:
                                        min_lr=0.5e-6)
 
         callbacks = [terminator, lr_scheduler, lr_reducer]
+
+        if constant.LIMIT_MEMORY:
+            config = tf.ConfigProto(log_device_placement=True, allow_soft_placement=True)
+            config.gpu_options.allow_growth = True
+            sess = tf.Session(config=config)
+            backend.set_session(sess)
         try:
             if constant.DATA_AUGMENTATION:
                 flow = self.datagen.flow(self.x_train, self.y_train, batch_size)
