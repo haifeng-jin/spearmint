@@ -159,13 +159,6 @@ class ModelTrainer:
 
         callbacks = [terminator, lr_scheduler, lr_reducer]
 
-        if constant.LIMIT_MEMORY:
-            config = tf.ConfigProto(log_device_placement=True, allow_soft_placement=True)
-            config.gpu_options.allow_growth = True
-            sess = tf.Session(config=config)
-            init = tf.global_variables_initializer()
-            sess.run(init)
-            backend.set_session(sess)
         try:
             if constant.DATA_AUGMENTATION:
                 flow = self.datagen.flow(self.x_train, self.y_train, batch_size)
@@ -208,31 +201,58 @@ def get_data():
 
 
 def cnn(params):
-    r = [params['regularizer1'][0], params['regularizer2'][0], params['regularizer3'][0]]
+    if constant.LIMIT_MEMORY:
+        config = tf.ConfigProto(allow_soft_placement=True)
+        config.gpu_options.allow_growth = True
+        sess = tf.Session(config=config)
+        init = tf.global_variables_initializer()
+        sess.run(init)
+        backend.set_session(sess)
+
+    r = [params['regularizer1'][0],
+         params['regularizer2'][0],
+         params['regularizer3'][0],
+         params['regularizer4'][0]]
     w = [params['width1'][0],
          params['width2'][0],
-         params['width3'][0]]
+         params['width3'][0],
+         params['width4'][0],
+         params['width5'][0],
+         params['width6'][0]]
     d = [params['dropout1'][0],
          params['dropout2'][0],
-         params['dropout3'][0]]
+         params['dropout3'][0],
+         params['dropout4'][0],
+         params['dropout5'][0],
+         params['dropout6'][0]]
 
     x_train, y_train, x_test, y_test = get_data()
 
+    conv = Conv2D
+    pool = MaxPooling2D
     # Input image dimensions.
     input_shape = x_train.shape[1:]
     input_tensor = output_tensor = Input(shape=input_shape)
-    for i in range(3):
-        output_tensor = Conv2D(filters=w[i],
-                               kernel_size=3,
-                               kernel_regularizer=l2(r[i]),
-                               kernel_initializer='he_normal')(output_tensor)
+    for i in range(4):
+        output_tensor = conv(32,
+                             kernel_size=3,
+                             padding='same',
+                             kernel_regularizer=l2(r[i]),
+                             kernel_initializer='he_normal',
+                             activation='linear')(output_tensor)
         output_tensor = BatchNormalization()(output_tensor)
         output_tensor = Activation('relu')(output_tensor)
-        output_tensor = Dropout(d[i])(output_tensor)
-        output_tensor = MaxPooling2D()(output_tensor)
+        output_tensor = Dropout(constant.CONV_DROPOUT_RATE)(output_tensor)
+        if i != 3:
+            output_tensor = pool(padding='same')(output_tensor)
 
     output_tensor = Flatten()(output_tensor)
-    output_tensor = Dense(10, kernel_initializer='he_normal', activation='softmax')(output_tensor)
+    output_tensor = Dense(w[4], kernel_initializer='he_normal', activation='relu')(output_tensor)
+    output_tensor = Dropout(d[4])(output_tensor)
+    output_tensor = Dense(w[5], kernel_initializer='he_normal', activation='relu')(output_tensor)
+    output_tensor = Dropout(d[5])(output_tensor)
+    output_tensor = Dense(10, activation='softmax')(output_tensor)
+    Model(inputs=input_tensor, outputs=output_tensor)
 
     model = Model(input_tensor, output_tensor)
 
@@ -260,11 +280,18 @@ if __name__ == '__main__':
     param = {'width1': [20],
              'width2': [20],
              'width3': [20],
+             'width4': [20],
+             'width5': [20],
+             'width6': [20],
              'dropout1': [0.25],
              'dropout2': [0.25],
              'dropout3': [0.25],
+             'dropout4': [0.25],
+             'dropout5': [0.25],
+             'dropout6': [0.25],
              'regularizer1': [0.05],
              'regularizer2': [0.05],
-             'regularizer3': [0.05]
+             'regularizer3': [0.05],
+             'regularizer4': [0.05],
              }
     main(0, param)
