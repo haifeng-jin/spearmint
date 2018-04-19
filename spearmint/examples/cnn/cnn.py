@@ -163,6 +163,8 @@ class ModelTrainer:
             config = tf.ConfigProto(log_device_placement=True, allow_soft_placement=True)
             config.gpu_options.allow_growth = True
             sess = tf.Session(config=config)
+            init = tf.global_variables_initializer()
+            sess.run(init)
             backend.set_session(sess)
         try:
             if constant.DATA_AUGMENTATION:
