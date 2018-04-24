@@ -12,7 +12,7 @@ import constant
 import GPUtil
 from keras import Input, Model
 from keras.callbacks import Callback, LearningRateScheduler, ReduceLROnPlateau
-from keras.datasets import cifar10
+from keras.datasets import cifar10, mnist
 from keras.layers import Conv2D, BatchNormalization, Dropout, Flatten, Dense, Activation, MaxPooling2D
 from keras.losses import categorical_crossentropy
 from keras.optimizers import Adam
@@ -200,6 +200,28 @@ def get_data():
     return x_train, y_train, x_test, y_test
 
 
+def get_mnist_data():
+    # Load the CIFAR10 data.
+    (x_train, y_train), (x_test, y_test) = mnist.load_data()
+
+    # Normalize data.
+    x_train = x_train.astype('float32') / 255
+    x_test = x_test.astype('float32') / 255
+
+    # If subtract pixel mean is enabled
+    x_train_mean = np.mean(x_train, axis=0)
+    x_train -= x_train_mean
+    x_test -= x_train_mean
+
+    # Convert class vectors to binary class matrices.
+    num_classes = 10
+    y_train = keras.utils.to_categorical(y_train, num_classes)
+    y_test = keras.utils.to_categorical(y_test, num_classes)
+    x_train = x_train.reshape(x_train.shape[0], 28, 28, 1)
+    x_test = x_test.reshape(x_test.shape[0], 28, 28, 1)
+    return x_train, y_train, x_test, y_test
+
+
 def cnn(params):
     if constant.LIMIT_MEMORY:
         config = tf.ConfigProto(allow_soft_placement=True)
@@ -226,7 +248,7 @@ def cnn(params):
          params['dropout5'][0],
          params['dropout6'][0]]
 
-    x_train, y_train, x_test, y_test = get_data()
+    x_train, y_train, x_test, y_test = get_mnist_data()
 
     conv = Conv2D
     pool = MaxPooling2D
