@@ -4,6 +4,7 @@ import keras
 import tensorflow as tf
 from keras import backend
 import numpy as np
+from keras.preprocessing import sequence
 from sklearn.model_selection import train_test_split
 from keras.preprocessing.image import ImageDataGenerator
 
@@ -12,8 +13,8 @@ import constant
 import GPUtil
 from keras import Input, Model
 from keras.callbacks import Callback, LearningRateScheduler, ReduceLROnPlateau
-from keras.datasets import cifar10, mnist
-from keras.layers import Conv2D, BatchNormalization, Dropout, Flatten, Dense, Activation, MaxPooling2D
+from keras.datasets import cifar10, mnist, fashion_mnist, imdb
+from keras.layers import Conv2D, BatchNormalization, Dropout, Flatten, Dense, Activation, MaxPooling2D, Embedding
 from keras.losses import categorical_crossentropy
 from keras.optimizers import Adam
 from keras.regularizers import l2
@@ -106,9 +107,10 @@ class ModelTrainer:
         verbose: verbosity mode
     """
 
-    def __init__(self, model, x_train, y_train, x_test, y_test, verbose):
+    def __init__(self, model, x_train, y_train, x_test, y_test, verbose, binary=False, augment=True):
         """Init ModelTrainer with model, x_train, y_train, x_test, y_test, verbose"""
-        model.compile(loss=categorical_crossentropy,
+        loss = categorical_crossentropy
+        model.compile(loss=loss,
                       optimizer=Adam(lr=lr_schedule(0)),
                       metrics=['accuracy'])
         self.model = model
@@ -117,7 +119,8 @@ class ModelTrainer:
         self.x_test = x_test
         self.y_test = y_test
         self.verbose = verbose
-        if constant.DATA_AUGMENTATION:
+        self.augment = augment
+        if augment:
             self.datagen = ImageDataGenerator(
                 # set input mean to 0 over the dataset
                 featurewise_center=False,
@@ -158,9 +161,8 @@ class ModelTrainer:
                                        min_lr=0.5e-6)
 
         callbacks = [terminator, lr_scheduler, lr_reducer]
-
         try:
-            if constant.DATA_AUGMENTATION:
+            if self.augment:
                 flow = self.datagen.flow(self.x_train, self.y_train, batch_size)
                 self.model.fit_generator(flow,
                                          epochs=constant.MAX_ITER_NUM,
@@ -178,7 +180,6 @@ class ModelTrainer:
             if self.verbose:
                 print('Training finished!')
                 print(e.message)
-
 
 def get_data():
     # Load the CIFAR10 data.
@@ -222,7 +223,43 @@ def get_mnist_data():
     return x_train, y_train, x_test, y_test
 
 
-def cnn(params):
+def get_fashion_data():
+    # Load the CIFAR10 data.
+    (x_train, y_train), (x_test, y_test) = fashion_mnist.load_data()
+
+    # Normalize data.
+    x_train = x_train.astype('float32') / 255
+    x_test = x_test.astype('float32') / 255
+
+    # If subtract pixel mean is enabled
+    x_train_mean = np.mean(x_train, axis=0)
+    x_train -= x_train_mean
+    x_test -= x_train_mean
+
+    # Convert class vectors to binary class matrices.
+    num_classes = 10
+    y_train = keras.utils.to_categorical(y_train, num_classes)
+    y_test = keras.utils.to_categorical(y_test, num_classes)
+    x_train = x_train.reshape(x_train.shape[0], 28, 28, 1)
+    x_test = x_test.reshape(x_test.shape[0], 28, 28, 1)
+    return x_train, y_train, x_test, y_test
+
+
+def get_imdb_data():
+    print('Loading data...')
+    (x_train, y_train), (x_test, y_test) = imdb.load_data(num_words=5000)
+    print(len(x_train), 'train sequences')
+    print(len(x_test), 'test sequences')
+
+    print('Pad sequences (samples x time)')
+    x_train = sequence.pad_sequences(x_train, maxlen=400)
+    x_test = sequence.pad_sequences(x_test, maxlen=400)
+    print('x_train shape:', x_train.shape)
+    print('x_test shape:', x_test.shape)
+    return x_train, y_train, x_test, y_test
+
+
+def cnn(params, data, conv=Conv2D, pool=MaxPooling2D, embed=False, binary=False):
     if constant.LIMIT_MEMORY:
         config = tf.ConfigProto(allow_soft_placement=True)
         config.gpu_options.allow_growth = True
@@ -248,13 +285,13 @@ def cnn(params):
          params['dropout5'][0],
          params['dropout6'][0]]
 
-    x_train, y_train, x_test, y_test = get_mnist_data()
+    x_train, y_train, x_test, y_test = data
 
-    conv = Conv2D
-    pool = MaxPooling2D
     # Input image dimensions.
     input_shape = x_train.shape[1:]
     input_tensor = output_tensor = Input(shape=input_shape)
+    if embed:
+        output_tensor = Embedding(5000, 50)(output_tensor)
     for i in range(4):
         output_tensor = conv(32,
                              kernel_size=3,
@@ -273,19 +310,20 @@ def cnn(params):
     output_tensor = Dropout(d[4])(output_tensor)
     output_tensor = Dense(w[5], kernel_initializer='he_normal', activation='relu')(output_tensor)
     output_tensor = Dropout(d[5])(output_tensor)
-    output_tensor = Dense(10, activation='softmax')(output_tensor)
-    Model(inputs=input_tensor, outputs=output_tensor)
+    if binary:
+        output_tensor = Dense(1, activation='sigmoid')(output_tensor)
+    else:
+        output_tensor = Dense(10, activation='softmax')(output_tensor)
 
     model = Model(input_tensor, output_tensor)
 
     x_train_new, x_val, y_train_new, y_val = train_test_split(x_train, y_train, test_size=0.25, random_state=42)
-    ModelTrainer(model, x_train_new, y_train_new, x_val, y_val, False).train_model()
+    ModelTrainer(model, x_train_new, y_train_new, x_val, y_val, False, binary, not embed).train_model()
     loss, accuracy = model.evaluate(x_val, y_val, verbose=False)
 
     print(accuracy)
 
     return 1 - accuracy
-
 
 # Write a function like this called 'main'
 def main(job_id, params):
@@ -293,7 +331,7 @@ def main(job_id, params):
     print(params)
     print('Start time: ', datetime.datetime.now())
     print 'Anything printed here will end up in the output directory for job #:', str(job_id)
-    result = cnn(params)
+    result = cnn(params, get_fashion_data())
     print('End time: ', datetime.datetime.now())
     return result
 
