@@ -1,0 +1,2 @@
+spearmint-lite/cleanup.sh spearmint/examples/cnn/c
+~/timeout.sh "python spearmint/spearmint/main.py --driver=local --method=GPEIOptChooser --method-args=noiseless=1 spearmint/examples/cnn/config.pb" 60*60*12
